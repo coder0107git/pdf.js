@@ -52,6 +52,8 @@ class AnnotationEditor {
 
   #resizersDiv = null;
 
+  #lastPointerCoords = null;
+
   #savedDimensions = null;
 
   #focusAC = null;
@@ -88,7 +90,7 @@ class AnnotationEditor {
 
   _focusEventsAllowed = true;
 
-  static _l10nPromise = null;
+  static _l10n = null;
 
   static _l10nResizer = null;
 
@@ -210,6 +212,8 @@ class AnnotationEditor {
    * @param {Object} l10n
    */
   static initialize(l10n, _uiManager) {
+    AnnotationEditor._l10n ??= l10n;
+
     AnnotationEditor._l10nResizer ||= Object.freeze({
       topLeft: "pdfjs-editor-resizer-top-left",
       topMiddle: "pdfjs-editor-resizer-top-middle",
@@ -220,21 +224,6 @@ class AnnotationEditor {
       bottomLeft: "pdfjs-editor-resizer-bottom-left",
       middleLeft: "pdfjs-editor-resizer-middle-left",
     });
-
-    AnnotationEditor._l10nPromise ||= new Map([
-      ...[
-        "pdfjs-editor-alt-text-button-label",
-        "pdfjs-editor-alt-text-edit-button-label",
-        "pdfjs-editor-alt-text-decorative-tooltip",
-        "pdfjs-editor-new-alt-text-added-button-label",
-        "pdfjs-editor-new-alt-text-missing-button-label",
-        "pdfjs-editor-new-alt-text-to-review-button-label",
-      ].map(str => [str, l10n.get(str)]),
-      ...[
-        // Strings that need l10n-arguments.
-        "pdfjs-editor-new-alt-text-generated-alt-text-with-disclaimer",
-      ].map(str => [str, l10n.get.bind(l10n, str)]),
-    ]);
 
     if (AnnotationEditor._borderLineWidth !== -1) {
       return;
@@ -749,6 +738,7 @@ class AnnotationEditor {
 
     const savedDraggable = this._isDraggable;
     this._isDraggable = false;
+    this.#lastPointerCoords = [event.screenX, event.screenY];
 
     const ac = new AbortController();
     const signal = this._uiManager.combinedSignal(ac);
@@ -758,6 +748,14 @@ class AnnotationEditor {
       "pointermove",
       this.#resizerPointermove.bind(this, name),
       { passive: true, capture: true, signal }
+    );
+    window.addEventListener(
+      "touchmove",
+      e => {
+        // Prevent the page from scrolling.
+        e.preventDefault();
+      },
+      { passive: false, signal }
     );
     window.addEventListener("contextmenu", noContextMenu, { signal });
     const savedX = this.x;
@@ -899,10 +897,23 @@ class AnnotationEditor {
     let ratioX = 1;
     let ratioY = 1;
 
-    let [deltaX, deltaY] = this.screenToPageTranslation(
-      event.movementX,
-      event.movementY
-    );
+    let deltaX, deltaY;
+
+    if (!event.fromKeyboard) {
+      // We can't use event.movementX/Y because they're not reliable:
+      //  https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent/movementX
+      // (it was buggy on a laptop with a touch screen).
+      const { screenX, screenY } = event;
+      const [lastScreenX, lastScreenY] = this.#lastPointerCoords;
+      [deltaX, deltaY] = this.screenToPageTranslation(
+        screenX - lastScreenX,
+        screenY - lastScreenY
+      );
+      this.#lastPointerCoords[0] = screenX;
+      this.#lastPointerCoords[1] = screenY;
+    } else {
+      ({ deltaX, deltaY } = event);
+    }
     [deltaX, deltaY] = invTransf(deltaX / parentWidth, deltaY / parentHeight);
 
     if (isDiagonal) {
@@ -1003,7 +1014,7 @@ class AnnotationEditor {
     if (this.#altText) {
       return;
     }
-    AltText.initialize(AnnotationEditor._l10nPromise);
+    AltText.initialize(AnnotationEditor._l10n);
     this.#altText = new AltText(this);
     if (this.#accessibilityData) {
       this.#altText.data = this.#accessibilityData;
@@ -1147,6 +1158,14 @@ class AnnotationEditor {
         capture: true,
         signal,
       });
+      window.addEventListener(
+        "touchmove",
+        e => {
+          // Prevent the page from scrolling.
+          e.preventDefault();
+        },
+        { passive: false, signal }
+      );
     }
 
     const pointerUpCallback = () => {
@@ -1572,8 +1591,9 @@ class AnnotationEditor {
       return;
     }
     this.#resizerPointermove(this.#focusedResizerName, {
-      movementX: x,
-      movementY: y,
+      deltaX: x,
+      deltaY: y,
+      fromKeyboard: true,
     });
   }
 

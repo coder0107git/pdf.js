@@ -2058,6 +2058,15 @@
     "type": "eq"
   },
   {
+    "id": "issue18973",
+    "file": "pdfs/issue18973.pdf",
+    "md5": "b9bbd312269862bf39bb2a31023a9d02",
+    "link": true,
+    "rounds": 1,
+    "firstPage": 45,
+    "type": "eq"
+  },
+  {
     "id": "issue9262",
     "file": "pdfs/issue9262_reduced.pdf",
     "md5": "5347ce2d7b3866625c22e115fd90e0de",
@@ -4717,6 +4726,13 @@
     "rounds": 1,
     "link": false,
     "type": "eq"
+  },
+  {
+    "id": "issue18986",
+    "file": "pdfs/issue18986.pdf",
+    "md5": "e147084fabd9677366f6ae3586dd311b",
+    "rounds": 1,
+    "type": "load"
   },
   {
     "id": "issue6652",
@@ -10733,7 +10749,8 @@
     "rounds": 1,
     "type": "eq",
     "link": true,
-    "talos": false
+    "talos": false,
+    "noChrome": true
   },
   {
     "id": "issue18956",
@@ -10741,5 +10758,40 @@
     "md5": "73e8cd32bd063e42fcc4b270c78549b1",
     "rounds": 1,
     "type": "eq"
+  },
+  {
+    "id": "issue19022",
+    "file": "pdfs/issue19022.pdf",
+    "md5": "7d7a9c45f93a9db269800855ccffe7cd",
+    "rounds": 1,
+    "type": "eq",
+    "link": true
+  },
+  {
+    "id": "issue19083",
+    "file": "pdfs/issue19083.pdf",
+    "md5": "2e2aa6c1904c1e6a89a5a6ec95d5ce7e",
+    "rounds": 1,
+    "forms": true,
+    "talos": false,
+    "type": "eq"
+  },
+  {
+    "id": "issue17190",
+    "file": "pdfs/issue17190.pdf",
+    "md5": "06e3ce6492dc0b5815a63965b5d7144c",
+    "rounds": 1,
+    "talos": false,
+    "type": "eq",
+    "link": true
+  },
+  {
+    "id": "issue17190_1",
+    "file": "pdfs/issue17190_1.pdf",
+    "md5": "63bbc71a6c2cdec11bb20c5744232c47",
+    "rounds": 1,
+    "talos": false,
+    "type": "eq",
+    "link": true
   }
 ]

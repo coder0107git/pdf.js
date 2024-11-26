@@ -118,6 +118,9 @@ pdfjs-document-properties-keywords = Fjalëkyçe:
 pdfjs-document-properties-creation-date = Datë Krijimi:
 pdfjs-document-properties-modification-date = Datë Ndryshimi:
 # Variables:
+#   $dateObj (Date) - the creation/modification date and time of the PDF file
+pdfjs-document-properties-date-time-string = { DATETIME($dateObj, dateStyle: "short", timeStyle: "medium") }
+# Variables:
 #   $date (Date) - the creation/modification date of the PDF file
 #   $time (Time) - the creation/modification time of the PDF file
 pdfjs-document-properties-date-string = { $date }, { $time }
@@ -274,6 +277,9 @@ pdfjs-annotation-date-string = { $date }, { $time }
 # Some common types are e.g.: "Check", "Text", "Comment", "Note"
 pdfjs-text-annotation-type =
     .alt = [Nënvizim { $type }]
+# Variables:
+#   $dateObj (Date) - the modification date and time of the annotation
+pdfjs-annotation-date-time-string = { DATETIME($dateObj, dateStyle: "short", timeStyle: "medium") }
 
 ## Password
 
@@ -328,6 +334,10 @@ pdfjs-editor-stamp-add-image-button-label = Shtoni figurë
 pdfjs-editor-free-highlight-thickness-input = Trashësi
 pdfjs-editor-free-highlight-thickness-title =
     .title = Ndryshoni trashësinë kur theksoni objekte tjetër nga tekst
+# .default-content is used as a placeholder in an empty text editor.
+pdfjs-free-text2 =
+    .aria-label = Përpunues Tekstesh
+    .default-content = Filloni të shtypni…
 pdfjs-free-text =
     .aria-label = Përpunues Tekstesh
 pdfjs-free-text-default-content = Filloni të shtypni…

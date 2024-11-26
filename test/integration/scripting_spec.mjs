@@ -1229,59 +1229,50 @@ describe("Interaction", () => {
 
           await typeAndWaitForSandbox(page, getSelector("27R"), "Hello");
           await page.waitForFunction(
-            `${getQuerySelector("27R")}.value !== "Hello"`
+            `${getQuerySelector("27R")}.value === "HELLO"`
           );
-
-          let text = await page.$eval(getSelector("27R"), el => el.value);
-          expect(text).withContext(`In ${browserName}`).toEqual("HELLO");
 
           await typeAndWaitForSandbox(page, getSelector("27R"), " world");
           await page.waitForFunction(
-            `${getQuerySelector("27R")}.value !== "HELLO world"`
+            `${getQuerySelector("27R")}.value === "HELLO WORLD"`
           );
 
-          text = await page.$eval(getSelector("27R"), el => el.value);
-          expect(text).withContext(`In ${browserName}`).toEqual("HELLO WORLD");
-
           await page.keyboard.press("Backspace");
+          await waitForSandboxTrip(page);
           await page.keyboard.press("Backspace");
-
+          await waitForSandboxTrip(page);
           await page.waitForFunction(
-            `${getQuerySelector("27R")}.value !== "HELLO WORLD"`
+            `${getQuerySelector("27R")}.value === "HELLO WOR"`
           );
-
-          text = await page.$eval(getSelector("27R"), el => el.value);
-          expect(text).withContext(`In ${browserName}`).toEqual("HELLO WOR");
 
           await typeAndWaitForSandbox(page, getSelector("27R"), "12.dL");
-
           await page.waitForFunction(
-            `${getQuerySelector("27R")}.value !== "HELLO WOR"`
+            `${getQuerySelector("27R")}.value === "HELLO WORDL"`
           );
-
-          text = await page.$eval(getSelector("27R"), el => el.value);
-          expect(text).withContext(`In ${browserName}`).toEqual("HELLO WORDL");
 
           await typeAndWaitForSandbox(page, getSelector("27R"), " ");
-
           await kbDeleteLastWord(page);
-
+          await waitForSandboxTrip(page);
           await page.waitForFunction(
-            `${getQuerySelector("27R")}.value !== "HELLO WORDL "`
+            `${getQuerySelector("27R")}.value === "HELLO "`
           );
-
-          text = await page.$eval(getSelector("27R"), el => el.value);
-          expect(text).withContext(`In ${browserName}`).toEqual("HELLO ");
 
           await page.$eval(getSelector("27R"), el => {
             // Select LL
             el.selectionStart = 2;
             el.selectionEnd = 4;
           });
+          await typeAndWaitForSandbox(page, getSelector("27R"), "a");
+          await page.waitForFunction(
+            `${getQuerySelector("27R")}.value === "HEAO "`
+          );
 
-          await page.keyboard.press("a");
-          text = await page.$eval(getSelector("27R"), el => el.value);
-          expect(text).withContext(`In ${browserName}`).toEqual("HEAO ");
+          // The typing actions in the first textbox caused sandbox events to be
+          // queued. We don't close the document between tests, so we have to
+          // flush them here, by clicking the second textbox, so they don't leak
+          // through to the following test.
+          await page.click(getSelector("28R"));
+          await waitForSandboxTrip(page);
         })
       );
     });
@@ -1292,30 +1283,19 @@ describe("Interaction", () => {
           await waitForScripting(page);
 
           await page.click(getSelector("28R"));
-          await page.$eval(getSelector("28R"), el =>
-            el.setSelectionRange(0, 0)
-          );
-
+          await page.keyboard.press("Home");
           await page.type(getSelector("28R"), "Hello");
           await page.waitForFunction(
-            `${getQuerySelector("28R")}.value !== "123"`
+            `${getQuerySelector("28R")}.value === "Hello123"`
           );
 
-          let text = await page.$eval(getSelector("28R"), el => el.value);
-          expect(text).withContext(`In ${browserName}`).toEqual("Hello123");
-
-          // The action will trigger a calculateNow which itself
-          // will trigger a resetForm (inducing a calculateNow) and a
-          // calculateNow.
+          // The action triggers a `calculateNow` which in turn triggers a
+          // `resetForm (inducing a `calculateNow`) and a `calculateNow`.
+          // Without infinite loop prevention the field would be empty.
           await page.click("[data-annotation-id='31R']");
-
           await page.waitForFunction(
-            `${getQuerySelector("28R")}.value !== "Hello123"`
+            `${getQuerySelector("28R")}.value === "123"`
           );
-
-          // Without preventing against infinite loop the field is empty.
-          text = await page.$eval(getSelector("28R"), el => el.value);
-          expect(text).withContext(`In ${browserName}`).toEqual("123");
         })
       );
     });

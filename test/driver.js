@@ -25,7 +25,7 @@ const {
   TextLayer,
   XfaLayer,
 } = pdfjsLib;
-const { Outliner } = pdfjsTestingUtils;
+const { HighlightOutliner } = pdfjsTestingUtils;
 const { GenericL10n, parseQueryString, SimpleLinkService } = pdfjsViewer;
 
 const WAITING_TIME = 100; // ms
@@ -370,19 +370,51 @@ class Rasterize {
       }
       // We set the borderWidth to 0.001 to slighly increase the size of the
       // boxes so that they can be merged together.
-      const outliner = new Outliner(boxes, /* borderWidth = */ 0.001);
+      const outliner = new HighlightOutliner(boxes, /* borderWidth = */ 0.001);
       // We set the borderWidth to 0.0025 in order to have an outline which is
       // slightly bigger than the highlight itself.
       // We must add an inner margin to avoid to have a partial outline.
-      const outlinerForOutline = new Outliner(
+      const outlinerForOutline = new HighlightOutliner(
         boxes,
         /* borderWidth = */ 0.0025,
         /* innerMargin = */ 0.001
       );
       const drawLayer = new DrawLayer({ pageIndex: 0 });
       drawLayer.setParent(div);
-      drawLayer.highlight(outliner.getOutlines(), "orange", 0.4);
-      drawLayer.highlightOutline(outlinerForOutline.getOutlines());
+      const outlines = outliner.getOutlines();
+      drawLayer.draw(
+        {
+          bbox: outlines.box,
+          root: {
+            viewBox: "0 0 1 1",
+            fill: "orange",
+            "fill-opacity": 0.4,
+          },
+          rootClass: {
+            highlight: true,
+            free: false,
+          },
+          path: {
+            d: outlines.toSVGPath(),
+          },
+        },
+        /* isPathUpdatable = */ false,
+        /* hasClip = */ true
+      );
+      const focusLine = outlinerForOutline.getOutlines();
+      drawLayer.drawOutline(
+        {
+          rootClass: {
+            highlightOutline: true,
+            free: false,
+          },
+          bbox: focusLine.box,
+          path: {
+            d: focusLine.toSVGPath(),
+          },
+        },
+        /* mustRemoveSelfIntersections = */ false
+      );
 
       svg.append(foreignObject);
 
@@ -572,6 +604,13 @@ class Driver {
           this._nextPage(task, 'Expected "other" test-case to be linked.');
           return;
         }
+        this.currentTask++;
+        this._nextTask();
+        return;
+      }
+
+      if (task.noChrome && window?.chrome) {
+        this._log(`Skipping file "${task.file}" (because on Chrome)\n`);
         this.currentTask++;
         this._nextTask();
         return;

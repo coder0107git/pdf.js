@@ -12,7 +12,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-/* eslint-env node */
 
 import {
   babelPluginPDFJSPreprocessor,
@@ -84,7 +83,7 @@ const ENV_TARGETS = [
   "Chrome >= 103",
   "Firefox ESR",
   "Safari >= 16.4",
-  "Node >= 18",
+  "Node >= 20",
   "> 1%",
   "not IE > 0",
   "not dead",
@@ -98,7 +97,7 @@ const AUTOPREFIXER_CONFIG = {
 const BABEL_TARGETS = ENV_TARGETS.join(", ");
 
 const BABEL_PRESET_ENV_OPTS = Object.freeze({
-  corejs: "3.38.1",
+  corejs: "3.39.0",
   exclude: ["web.structured-clone"],
   shippedProposals: true,
   useBuiltIns: "usage",
@@ -191,6 +190,8 @@ function createWebpackAlias(defines) {
     "fluent-dom": "node_modules/@fluent/dom/esm/index.js",
   };
   const libraryAlias = {
+    "display-cmap_reader_factory": "src/display/stubs.js",
+    "display-standard_fontdata_factory": "src/display/stubs.js",
     "display-fetch_stream": "src/display/stubs.js",
     "display-network": "src/display/stubs.js",
     "display-node_stream": "src/display/stubs.js",
@@ -219,6 +220,10 @@ function createWebpackAlias(defines) {
   };
 
   if (defines.CHROME) {
+    libraryAlias["display-cmap_reader_factory"] =
+      "src/display/cmap_reader_factory.js";
+    libraryAlias["display-standard_fontdata_factory"] =
+      "src/display/standard_fontdata_factory.js";
     libraryAlias["display-fetch_stream"] = "src/display/fetch_stream.js";
     libraryAlias["display-network"] = "src/display/network.js";
 
@@ -231,6 +236,10 @@ function createWebpackAlias(defines) {
     // Aliases defined here must also be replicated in the paths section of
     // the tsconfig.json file for the type generation to work.
     // In the tsconfig.json files, the .js extension must be omitted.
+    libraryAlias["display-cmap_reader_factory"] =
+      "src/display/cmap_reader_factory.js";
+    libraryAlias["display-standard_fontdata_factory"] =
+      "src/display/standard_fontdata_factory.js";
     libraryAlias["display-fetch_stream"] = "src/display/fetch_stream.js";
     libraryAlias["display-network"] = "src/display/network.js";
     libraryAlias["display-node_stream"] = "src/display/node_stream.js";
@@ -373,6 +382,7 @@ function createWebpackConfig(
     module: {
       rules: [
         {
+          test: /\.[mc]?js$/,
           loader: "babel-loader",
           exclude: babelExcludeRegExp,
           options: {
@@ -1573,6 +1583,8 @@ function buildLibHelper(bundleDefines, inputStream, outputDir) {
     defines: bundleDefines,
     map: {
       "pdfjs-lib": "../pdf.js",
+      "display-cmap_reader_factory": "./cmap_reader_factory.js",
+      "display-standard_fontdata_factory": "./standard_fontdata_factory.js",
       "display-fetch_stream": "./fetch_stream.js",
       "display-network": "./network.js",
       "display-node_stream": "./node_stream.js",
@@ -1944,8 +1956,6 @@ gulp.task("lint", function (done) {
   // Ensure that we lint the Firefox specific *.jsm files too.
   const esLintOptions = [
     "node_modules/eslint/bin/eslint",
-    "--ext",
-    ".js,.jsm,.mjs,.json",
     ".",
     "--report-unused-disable-directives",
   ];
@@ -1974,8 +1984,9 @@ gulp.task("lint", function (done) {
 
   const svgLintOptions = [
     "node_modules/svglint/bin/cli.js",
-    "web/**/*.svg",
+    "**/*.svg",
     "--ci",
+    "--no-summary",
   ];
 
   const esLintProcess = startNode(esLintOptions, { stdio: "inherit" });
@@ -2000,12 +2011,7 @@ gulp.task("lint", function (done) {
         }
 
         const svgLintProcess = startNode(svgLintOptions, {
-          stdio: "pipe",
-        });
-        svgLintProcess.stdout.setEncoding("utf8");
-        svgLintProcess.stdout.on("data", m => {
-          m = m.toString().replace(/-+ Summary -+.*/ms, "");
-          console.log(m);
+          stdio: "inherit",
         });
         svgLintProcess.on("close", function (svgLintCode) {
           if (svgLintCode !== 0) {
@@ -2244,8 +2250,7 @@ function packageJson() {
     bugs: DIST_BUGS_URL,
     license: DIST_LICENSE,
     optionalDependencies: {
-      canvas: "^3.0.0-rc2",
-      path2d: "^0.2.1",
+      "@napi-rs/canvas": "^0.1.62",
     },
     browser: {
       canvas: false,
@@ -2259,7 +2264,7 @@ function packageJson() {
       url: `git+${DIST_GIT_URL}`,
     },
     engines: {
-      node: ">=18",
+      node: ">=20",
     },
     scripts: {},
   };

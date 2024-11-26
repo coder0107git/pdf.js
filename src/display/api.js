@@ -21,6 +21,7 @@ import {
   AbortException,
   AnnotationMode,
   assert,
+  FeatureTest,
   getVerbosityLevel,
   info,
   InvalidPDFException,
@@ -44,10 +45,6 @@ import {
 } from "./annotation_storage.js";
 import {
   deprecated,
-  DOMCanvasFactory,
-  DOMCMapReaderFactory,
-  DOMFilterFactory,
-  DOMStandardFontDataFactory,
   isDataScheme,
   isValidFetchUrl,
   PageViewport,
@@ -59,10 +56,13 @@ import {
   NodeCanvasFactory,
   NodeCMapReaderFactory,
   NodeFilterFactory,
-  NodePackages,
   NodeStandardFontDataFactory,
 } from "display-node_utils";
 import { CanvasGraphics } from "./canvas.js";
+import { DOMCanvasFactory } from "./canvas_factory.js";
+import { DOMCMapReaderFactory } from "display-cmap_reader_factory";
+import { DOMFilterFactory } from "./filter_factory.js";
+import { DOMStandardFontDataFactory } from "display-standard_fontdata_factory";
 import { GlobalWorkerOptions } from "./worker_options.js";
 import { MessageHandler } from "../shared/message_handler.js";
 import { Metadata } from "./metadata.js";
@@ -177,6 +177,21 @@ const DefaultStandardFontDataFactory =
  *   `OffscreenCanvas` in the worker. Primarily used to improve performance of
  *   image conversion/rendering.
  *   The default value is `true` in web environments and `false` in Node.js.
+ * @property {boolean} [isImageDecoderSupported] - Determines if we can use
+ *   `ImageDecoder` in the worker. Primarily used to improve performance of
+ *   image conversion/rendering.
+ *   The default value is `true` in web environments and `false` in Node.js.
+ *
+ *   NOTE: Also temporarily disabled in Chromium browsers, until we no longer
+ *   support the affected browser versions, because of various bugs:
+ *
+ *    - Crashes when using the BMP decoder with huge images, e.g. issue6741.pdf;
+ *      see https://issues.chromium.org/issues/374807001
+ *
+ *    - Broken images when using the JPEG decoder with images that have custom
+ *      colour profiles, e.g. GitHub discussion 19030;
+ *      see https://issues.chromium.org/issues/378869810
+ *
  * @property {number} [canvasMaxAreaInBytes] - The integer value is used to
  *   know when an image must be resized (uses `OffscreenCanvas` in the worker).
  *   If it's -1 then a possibly slow algorithm is used to guess the max value.
@@ -281,6 +296,16 @@ function getDocument(src = {}) {
     typeof src.isOffscreenCanvasSupported === "boolean"
       ? src.isOffscreenCanvasSupported
       : !isNodeJS;
+  const isImageDecoderSupported =
+    // eslint-disable-next-line no-nested-ternary
+    typeof src.isImageDecoderSupported === "boolean"
+      ? src.isImageDecoderSupported
+      : // eslint-disable-next-line no-nested-ternary
+        typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")
+        ? true
+        : typeof PDFJSDev !== "undefined" && PDFJSDev.test("CHROME")
+          ? false
+          : !isNodeJS && (FeatureTest.platform.isFirefox || !globalThis.chrome);
   const canvasMaxAreaInBytes = Number.isInteger(src.canvasMaxAreaInBytes)
     ? src.canvasMaxAreaInBytes
     : -1;
@@ -385,6 +410,7 @@ function getDocument(src = {}) {
       ignoreErrors,
       isEvalSupported,
       isOffscreenCanvasSupported,
+      isImageDecoderSupported,
       canvasMaxAreaInBytes,
       fontExtraProperties,
       useSystemFonts,
@@ -439,15 +465,20 @@ function getDocument(src = {}) {
           PDFJSDev.test("GENERIC") &&
           isNodeJS
         ) {
-          const isFetchSupported =
-            typeof fetch !== "undefined" &&
-            typeof Response !== "undefined" &&
-            "body" in Response.prototype;
-
-          NetworkStream =
-            isFetchSupported && isValidFetchUrl(url)
-              ? PDFFetchStream
-              : PDFNodeStream;
+          if (isValidFetchUrl(url)) {
+            if (
+              typeof fetch === "undefined" ||
+              typeof Response === "undefined" ||
+              !("body" in Response.prototype)
+            ) {
+              throw new Error(
+                "getDocument - the Fetch API was disabled in Node.js, see `--no-experimental-fetch`."
+              );
+            }
+            NetworkStream = PDFFetchStream;
+          } else {
+            NetworkStream = PDFNodeStream;
+          }
         } else {
           NetworkStream = isValidFetchUrl(url)
             ? PDFFetchStream
@@ -2125,14 +2156,6 @@ class PDFWorker {
    * @type {Promise<void>}
    */
   get promise() {
-    if (
-      typeof PDFJSDev !== "undefined" &&
-      PDFJSDev.test("GENERIC") &&
-      isNodeJS
-    ) {
-      // Ensure that all Node.js packages/polyfills have loaded.
-      return Promise.all([NodePackages.promise, this._readyCapability.promise]);
-    }
     return this._readyCapability.promise;
   }
 
@@ -2634,32 +2657,27 @@ class WorkerTransport {
       };
     });
 
-    messageHandler.on("ReaderHeadersReady", data => {
-      const headersCapability = Promise.withResolvers();
-      const fullReader = this._fullReader;
-      fullReader.headersReady.then(() => {
-        // If stream or range are disabled, it's our only way to report
-        // loading progress.
-        if (!fullReader.isStreamingSupported || !fullReader.isRangeSupported) {
-          if (this._lastProgress) {
-            loadingTask.onProgress?.(this._lastProgress);
-          }
-          fullReader.onProgress = evt => {
-            loadingTask.onProgress?.({
-              loaded: evt.loaded,
-              total: evt.total,
-            });
-          };
+    messageHandler.on("ReaderHeadersReady", async data => {
+      await this._fullReader.headersReady;
+
+      const { isStreamingSupported, isRangeSupported, contentLength } =
+        this._fullReader;
+
+      // If stream or range are disabled, it's our only way to report
+      // loading progress.
+      if (!isStreamingSupported || !isRangeSupported) {
+        if (this._lastProgress) {
+          loadingTask.onProgress?.(this._lastProgress);
         }
+        this._fullReader.onProgress = evt => {
+          loadingTask.onProgress?.({
+            loaded: evt.loaded,
+            total: evt.total,
+          });
+        };
+      }
 
-        headersCapability.resolve({
-          isStreamingSupported: fullReader.isStreamingSupported,
-          isRangeSupported: fullReader.isRangeSupported,
-          contentLength: fullReader.contentLength,
-        });
-      }, headersCapability.reject);
-
-      return headersCapability.promise;
+      return { isStreamingSupported, isRangeSupported, contentLength };
     });
 
     messageHandler.on("GetRangeReader", (data, sink) => {
@@ -2909,29 +2927,31 @@ class WorkerTransport {
       });
     });
 
-    messageHandler.on("FetchBuiltInCMap", data => {
+    messageHandler.on("FetchBuiltInCMap", async data => {
+      if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) {
+        throw new Error("Not implemented: FetchBuiltInCMap");
+      }
       if (this.destroyed) {
-        return Promise.reject(new Error("Worker was destroyed."));
+        throw new Error("Worker was destroyed.");
       }
       if (!this.cMapReaderFactory) {
-        return Promise.reject(
-          new Error(
-            "CMapReaderFactory not initialized, see the `useWorkerFetch` parameter."
-          )
+        throw new Error(
+          "CMapReaderFactory not initialized, see the `useWorkerFetch` parameter."
         );
       }
       return this.cMapReaderFactory.fetch(data);
     });
 
-    messageHandler.on("FetchStandardFontData", data => {
+    messageHandler.on("FetchStandardFontData", async data => {
+      if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) {
+        throw new Error("Not implemented: FetchStandardFontData");
+      }
       if (this.destroyed) {
-        return Promise.reject(new Error("Worker was destroyed."));
+        throw new Error("Worker was destroyed.");
       }
       if (!this.standardFontDataFactory) {
-        return Promise.reject(
-          new Error(
-            "StandardFontDataFactory not initialized, see the `useWorkerFetch` parameter."
-          )
+        throw new Error(
+          "StandardFontDataFactory not initialized, see the `useWorkerFetch` parameter."
         );
       }
       return this.standardFontDataFactory.fetch(data);
